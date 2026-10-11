@@ -1,0 +1,1620 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,height=device-height,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Clock">
+<link rel="icon" href="data:,">
+<title>Clock</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;background:#000;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none}
+body{display:flex;align-items:center;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display",sans-serif}
+
+.clock-container{
+  position:relative;
+  width:100%;
+  height:100%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:#000;
+  padding:
+    max(env(safe-area-inset-top),10px)
+    max(env(safe-area-inset-right),10px)
+    max(env(safe-area-inset-bottom),12px)
+    max(env(safe-area-inset-left),10px);
+}
+
+.stage{
+  position:relative;
+  width:100%;
+  height:100%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+.time-display{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  position:relative;
+  transform-origin:center center;
+  transition:opacity .3s;
+  --unit-w:140px;
+  --unit-h:200px;
+  --unit-size:200px;
+  --unit-overlap:50px;
+
+  --col-deep:#0b62c5;
+  --col-light:#62b7ff;
+  --col-dot:rgba(255,255,255,.8);
+}
+.time-display.hidden{ display:none; }
+
+.groups{display:flex;align-items:center}
+.colon{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.13em;margin:0 calc(-1 * (var(--unit-overlap) / 2));position:relative;z-index:50;pointer-events:none;transform:translateY(0.07em);font-size: var(--unit-size)}
+.dot{width:0.17em;height:0.17em;background:var(--col-dot);border-radius:50%;transition:background .4s}
+.digit-wrapper{position:relative;width:var(--unit-w);height:var(--unit-h);overflow:visible}
+.groups .digit-wrapper + .digit-wrapper{margin-left:calc(-1 * var(--unit-overlap))}
+#h0{z-index:10;transform:rotate(-6deg) skewX(-3deg);transform-origin:50% 60%}
+#h1{z-index:20;transform:rotate(4deg) skewX(2deg);transform-origin:50% 60%}
+#m0{z-index:10;transform:rotate(-5deg) skewX(-2deg);transform-origin:50% 60%}
+#m1{z-index:20;transform:rotate(5deg) skewX(3deg);transform-origin:50% 60%}
+#s0{z-index:10;transform:rotate(-4deg) skewX(-2deg);transform-origin:50% 60%}
+#s1{z-index:20;transform:rotate(6deg) skewX(2deg);transform-origin:50% 60%}
+.digit-layer{position:absolute;inset:0;display:flex;align-items:flex-start;justify-content:center;width:100%;height:100%;will-change:transform,opacity;transform:translateY(0);opacity:1;transition:transform var(--slide-ms) var(--slide-ease),opacity var(--slide-ms) var(--slide-ease);backface-visibility:hidden;transform-style:preserve-3d}
+.digit-text{width:100%;text-align:center;line-height:1;font-size:var(--unit-size);font-weight:1000;letter-spacing:-0.05em;font-feature-settings:"tnum";font-variant-numeric:tabular-nums;font-family:"SF Pro Rounded","Avenir Next Rounded","Arial Rounded MT Bold","Nunito","Quicksand",-apple-system,BlinkMacSystemFont,"SF Pro Display",sans-serif;-webkit-font-smoothing:antialiased;text-rendering:geometricPrecision;-webkit-text-stroke:1.2px currentColor;text-shadow:0 0 .6px currentColor;filter:blur(.10px);opacity:.98;transition:color .4s}
+.deep .digit-text{color:var(--col-deep)}
+.light .digit-text{color:var(--col-light);opacity:.90;mix-blend-mode:screen;text-shadow:0 0 .6px currentColor,0 0 10px rgba(255,255,255,.08),0 0 22px rgba(255,255,255,.05)}
+
+body.break-mode .deep .digit-text{color:#c5860b}
+body.break-mode .light .digit-text{color:#ffc862;text-shadow:0 0 .6px currentColor,0 0 10px rgba(255,200,98,.18),0 0 22px rgba(255,200,98,.10)}
+body.break-mode .dot{background:rgba(255,255,255,.8)}
+
+:root{--slide-ms:760ms;--slide-ease:cubic-bezier(0.2,0.9,0.2,1);--slide-offset:120%}
+.off-up{transform:translateY(calc(-1 * var(--slide-offset)));opacity:0}
+.off-down{transform:translateY(var(--slide-offset));opacity:0}
+
+.analog-display{
+  position:absolute;
+  inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  transition:opacity .3s;
+}
+.analog-display.hidden{ display:none; }
+
+.analog-shell{
+  position: relative;
+  width: 92vmin;
+  height: 92vmin;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.analog-shell.style-apple{
+  background: #ffffff;
+  box-shadow:
+    0 0 0 1px rgba(0,0,0,0.06),
+    0 10px 40px rgba(0,0,0,0.45),
+    inset 0 1px 1px rgba(255,255,255,0.9),
+    inset 0 -2px 6px rgba(0,0,0,0.06);
+}
+
+.analog-shell.style-apple-dark{
+  background: #2c2c2e;
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.06),
+    0 10px 40px rgba(0,0,0,0.6),
+    inset 0 1px 1px rgba(255,255,255,0.10),
+    inset 0 -2px 8px rgba(0,0,0,0.5);
+}
+
+.analog-svg{
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  z-index: 2;
+}
+
+.analog-shell.style-apple .tick-hour{ stroke: #1c1c1e; stroke-width: 1.1; stroke-linecap: round; opacity: 1; }
+.analog-shell.style-apple .tick-minute{ stroke: #8e8e93; stroke-width: 0.5; stroke-linecap: round; opacity: 0.8; }
+.analog-shell.style-apple .face-number{ fill: #1c1c1e; opacity: 1; text-anchor: middle; dominant-baseline: central; }
+.analog-shell.style-apple .face-number.arabic{
+  font-family: "SF Pro Rounded","SF Pro Display","Helvetica Neue",-apple-system,sans-serif;
+  font-size: 6.6px; font-weight: 500; letter-spacing: -0.1px;
+}
+.analog-shell.style-apple .face-number.roman{
+  font-family: "SF Pro Display","Helvetica Neue",sans-serif;
+  font-size: 4.2px; font-weight: 500; letter-spacing: 0;
+}
+.analog-shell.style-apple .hand-hour{
+  stroke: #1c1c1e; stroke-width: 2.4; stroke-linecap: round; filter: drop-shadow(0 0 0.5px rgba(0,0,0,0.12));
+}
+.analog-shell.style-apple .hand-minute{
+  stroke: #1c1c1e; stroke-width: 1.8; stroke-linecap: round; filter: drop-shadow(0 0 0.5px rgba(0,0,0,0.12));
+}
+.analog-shell.style-apple .hand-second{
+  stroke: #ff9500; stroke-width: 0.9; stroke-linecap: round; filter: none;
+}
+.analog-shell.style-apple .center-dot{ fill: #1c1c1e; }
+
+.analog-shell.style-apple-dark .tick-hour{ stroke: #f2f2f7; stroke-width: 1.1; stroke-linecap: round; opacity: 1; }
+.analog-shell.style-apple-dark .tick-minute{ stroke: #8e8e93; stroke-width: 0.5; stroke-linecap: round; opacity: 0.7; }
+.analog-shell.style-apple-dark .face-number{ fill: #f2f2f7; opacity: 1; text-anchor: middle; dominant-baseline: central; }
+.analog-shell.style-apple-dark .face-number.arabic{
+  font-family: "SF Pro Rounded","SF Pro Display","Helvetica Neue",-apple-system,sans-serif;
+  font-size: 6.6px; font-weight: 500; letter-spacing: -0.1px;
+}
+.analog-shell.style-apple-dark .face-number.roman{
+  font-family: "SF Pro Display","Helvetica Neue",sans-serif;
+  font-size: 4.2px; font-weight: 500; letter-spacing: 0;
+}
+.analog-shell.style-apple-dark .hand-hour{
+  stroke: #f2f2f7; stroke-width: 2.4; stroke-linecap: round; filter: drop-shadow(0 0 0.5px rgba(0,0,0,0.6));
+}
+.analog-shell.style-apple-dark .hand-minute{
+  stroke: #f2f2f7; stroke-width: 1.8; stroke-linecap: round; filter: drop-shadow(0 0 0.5px rgba(0,0,0,0.6));
+}
+.analog-shell.style-apple-dark .hand-second{
+  stroke: #ff9500; stroke-width: 0.9; stroke-linecap: round; filter: none;
+}
+.analog-shell.style-apple-dark .center-dot{ fill: #f2f2f7; }
+
+.analog-svg.style-classic .face-number{ display:none; }
+.analog-svg.style-numeric .face-number.roman{ display:none; }
+.analog-svg.style-roman .face-number.arabic{ display:none; }
+
+.bottom-info{
+  position:absolute;
+  left:0;
+  right:0;
+  bottom: var(--info-bottom, calc(max(env(safe-area-inset-bottom), 12px) + 16px));
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:flex-start;
+  pointer-events:none;
+  transition:opacity .3s, right .3s, left .3s;
+  z-index:10;
+}
+
+body.analog-mode .bottom-info{
+  --info-bottom: calc(max(env(safe-area-inset-bottom), 12px) + 40px);
+  left: auto;
+  right: calc(max(env(safe-area-inset-right), 18px) + 48px + 16px);
+  align-items: flex-end;
+}
+
+.date-line{
+  text-align:center;
+  font-size:20px;
+  letter-spacing:.06em;
+  color:rgba(255,255,255,.72);
+  font-family:"SF Pro Rounded","Avenir Next Rounded","Arial Rounded MT","Nunito","Quicksand",-apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif;
+  font-weight:600;
+  line-height:1.2;
+  -webkit-font-smoothing:antialiased;
+  filter:none;
+  user-select:none;
+  pointer-events:none;
+  transition:opacity .3s;
+}
+body.analog-mode .date-line{ text-align: right; }
+.date-line.hidden{display:none}
+.phase-line{
+  margin-top:8px;
+  text-align:center;
+  font-size:14px;
+  letter-spacing:.12em;
+  color:rgba(255,255,255,.5);
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif;
+  font-weight:600;
+  height:20px;
+  transition:color .3s;
+}
+.phase-line.hidden{display:none}
+body.break-mode .phase-line{color:rgba(255,200,98,.75)}
+
+.hover-zone{position:fixed;right:0;bottom:0;width:160px;height:160px;z-index:198;pointer-events:auto;background:transparent}
+.settings-btn{position:fixed;right:max(env(safe-area-inset-right),18px);bottom:max(env(safe-area-inset-bottom),18px);width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:200;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);opacity:0;transition:background .2s,transform .2s,opacity .35s ease}
+.settings-btn.show,.settings-btn.open{opacity:1}
+.settings-btn:active{transform:scale(.92)}
+.settings-btn svg{width:24px;height:24px;stroke:rgba(255,255,255,.75);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:transform .4s ease}
+.settings-btn.open svg{transform:rotate(90deg)}
+.settings-panel{position:fixed;right:max(env(safe-area-inset-right),18px);bottom:calc(max(env(safe-area-inset-bottom),18px) + 60px);width:280px;max-width:calc(100vw - 36px);background:rgba(22,22,26,.96);border:1px solid rgba(255,255,255,.1);border-radius:18px;padding:16px;z-index:199;color:#fff;box-shadow:0 12px 40px rgba(0,0,0,.6);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);opacity:0;transform:translateY(12px) scale(.96);pointer-events:none;transition:opacity .22s ease,transform .22s ease;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif;max-height:80vh;overflow-y:auto}
+.settings-panel.open{opacity:1;transform:translateY(0) scale(1);pointer-events:auto}
+.settings-title{font-size:13px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.5);margin-bottom:12px}
+.setting-row{display:flex;align-items:center;justify-content:space-between;padding:9px 2px;font-size:15px;gap:8px}
+.setting-row + .setting-row{border-top:1px solid rgba(255,255,255,.06)}
+.setting-row .label{color:rgba(255,255,255,.9);flex-shrink:0}
+.setting-row.hidden{ display:none; }
+.switch{position:relative;width:46px;height:28px;border-radius:14px;background:rgba(255,255,255,.15);cursor:pointer;transition:background .2s;flex-shrink:0}
+.switch::after{content:'';position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.4)}
+.switch.on{background:#0a84ff}
+.switch.on::after{transform:translateX(18px)}
+.segmented{display:flex;background:rgba(255,255,255,.1);border-radius:9px;padding:2px;flex-shrink:0}
+.segmented button{border:none;background:transparent;color:rgba(255,255,255,.65);font-size:13px;font-weight:600;padding:5px 10px;border-radius:7px;cursor:pointer;transition:background .2s,color .2s;font-family:inherit;white-space:nowrap}
+.segmented button.active{background:rgba(255,255,255,.9);color:#111}
+.segmented.three button{padding:5px 10px;font-size:12.5px}
+.segmented.clockstyle button{padding:5px 10px;font-size:12.5px}
+
+.color-divider.hidden{ display:none; }
+
+.color-picker{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  padding:6px 2px 2px;
+  justify-content:flex-start;
+}
+.color-swatch{
+  width:32px;
+  height:32px;
+  border-radius:50%;
+  cursor:pointer;
+  position:relative;
+  border:2px solid transparent;
+  transition:transform .15s, border-color .2s;
+  flex-shrink:0;
+}
+.color-swatch:active{transform:scale(.9)}
+.color-swatch.selected{
+  border-color:#fff;
+  box-shadow:0 0 0 2px rgba(255,255,255,.25);
+}
+.swatch-blue    { background:linear-gradient(135deg, #0b62c5 0%, #0b62c5 50%, #62b7ff 50%, #62b7ff 100%); }
+.swatch-orange  { background:linear-gradient(135deg, #c25b0b 0%, #c25b0b 50%, #ffab62 50%, #ffab62 100%); }
+.swatch-yellow  { background:linear-gradient(135deg, #b39500 0%, #b39500 50%, #ffe25c 50%, #ffe25c 100%); }
+.swatch-pink    { background:linear-gradient(135deg, #c51875 0%, #c51875 50%, #ff8fc8 50%, #ff8fc8 100%); }
+.swatch-darkred { background:linear-gradient(135deg, #8b1a1a 0%, #8b1a1a 50%, #e06565 50%, #e06565 100%); }
+.swatch-green   { background:linear-gradient(135deg, #1a8b3d 0%, #1a8b3d 50%, #6fe092 50%, #6fe092 100%); }
+.swatch-mint    { background:linear-gradient(135deg, #1a9e8f 0%, #1a9e8f 50%, #7de8d8 50%, #7de8d8 100%); }
+.swatch-darkblue{ background:linear-gradient(135deg, #143d8a 0%, #143d8a 50%, #5a86e0 50%, #5a86e0 100%); }
+.swatch-purple  { background:linear-gradient(135deg, #7a2ea8 0%, #7a2ea8 50%, #c98fff 50%, #c98fff 100%); }
+.swatch-darkgreen{ background:linear-gradient(135deg, #2d5016 0%, #2d5016 50%, #7aa85a 50%, #7aa85a 100%); }
+.swatch-brown   { background:linear-gradient(135deg, #5c3a1e 0%, #5c3a1e 50%, #c19a6b 50%, #c19a6b 100%); }
+
+.timer-section{margin-top:10px;padding-top:12px;border-top:1px solid rgba(255,255,255,.08)}
+.timer-section.first{margin-top:0;padding-top:0;border-top:none}
+.timer-inputs{display:flex;align-items:center;justify-content:center;gap:6px;margin:10px 0 12px}
+.timer-inputs input{width:52px;height:40px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:9px;color:#fff;font-size:17px;font-weight:600;text-align:center;font-family:inherit;outline:none;-moz-appearance:textfield}
+.timer-inputs input::-webkit-outer-spin-button,.timer-inputs input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.timer-inputs input:focus{border-color:#0a84ff;background:rgba(10,132,255,.1)}
+.timer-inputs .unit{font-size:13px;color:rgba(255,255,255,.45)}
+.timer-btns{display:flex;gap:8px}
+.timer-btns button{flex:1;height:40px;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;transition:opacity .15s,transform .1s}
+.timer-btns button:active{transform:scale(.97)}
+.timer-btns .btn-start{background:#0a84ff;color:#fff}
+.timer-btns .btn-start:disabled{opacity:.35;cursor:default}
+.timer-btns .btn-cancel{background:rgba(255,255,255,.12);color:#fff}
+.timer-btns .btn-cancel:disabled{opacity:.35;cursor:default}
+.pomo-btns{display:flex;gap:8px}
+.pomo-btns button{flex:1;height:40px;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;transition:opacity .15s,transform .1s,background .2s}
+.pomo-btns button:active{transform:scale(.97)}
+.pomo-btns .btn-pomo{background:#0a84ff;color:#fff}
+.pomo-btns .btn-pomo:disabled{opacity:.35;cursor:default}
+.pomo-btns .btn-skip{background:rgba(255,255,255,.12);color:#fff}
+.pomo-btns .btn-skip:disabled{opacity:.35;cursor:default}
+.pomo-btns .btn-stop{background:rgba(255,255,255,.12);color:#fff}
+.pomo-btns .btn-stop:disabled{opacity:.35;cursor:default}
+
+.settings-divider{
+  margin-top:14px;
+  padding-top:14px;
+  border-top:1px solid rgba(255,255,255,.08);
+}
+
+@keyframes flash{0%,100%{opacity:0}50%{opacity:.55}}
+.timer-flash{position:fixed;inset:0;background:#62b7ff;pointer-events:none;z-index:999;opacity:0}
+.timer-flash.run{animation:flash .6s ease-in-out 5}
+.timer-flash.break{background:#ffc862}
+
+#confettiCanvas{
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 998;
+  opacity: 0;
+  transition: opacity .4s ease;
+}
+#confettiCanvas.active{
+  opacity: 1;
+}
+
+#emojiCanvas{
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 998;
+  opacity: 0;
+  transition: opacity .4s ease;
+}
+#emojiCanvas.active{
+  opacity: 1;
+}
+
+@media (max-width:768px){
+  .bottom-info{ --info-bottom: calc(max(env(safe-area-inset-bottom), 12px) + 16px); }
+  body.analog-mode .bottom-info{
+    --info-bottom: calc(max(env(safe-area-inset-bottom), 12px) + 30px);
+    right: calc(max(env(safe-area-inset-right), 18px) + 44px + 14px);
+  }
+  .date-line{font-size:20px;letter-spacing:.05em}
+  .phase-line{font-size:13px}
+  .settings-btn{width:44px;height:44px}
+  .color-swatch{width:30px;height:30px}
+  .segmented.three button{padding:5px 8px;font-size:12px}
+  .segmented.clockstyle button{padding:5px 8px;font-size:12px}
+}
+@media (hover:none) and (pointer:coarse){
+  .digit-text{filter:none!important;-webkit-text-stroke:1.0px currentColor!important;text-shadow:0 0 .4px currentColor!important}
+  .light .digit-text{mix-blend-mode:normal!important;text-shadow:0 0 .4px currentColor!important;opacity:.92!important}
+  body.break-mode .light .digit-text{text-shadow:0 0 .4px currentColor!important}
+  .date-line{filter:none!important;text-rendering:auto!important}
+  .dot{filter:none!important}
+  .settings-btn{opacity:1 !important}
+  .hover-zone{display:none}
+}
+</style>
+</head>
+<body>
+<div class="clock-container">
+  <div class="stage" id="stage">
+
+    <div class="time-display" id="timeDisplay">
+      <div class="groups">
+        <div class="digit-wrapper deep"  id="h0"></div>
+        <div class="digit-wrapper light" id="h1"></div>
+      </div>
+      <div class="colon" id="colon1"><div class="dot"></div><div class="dot"></div></div>
+      <div class="groups">
+        <div class="digit-wrapper deep"  id="m0"></div>
+        <div class="digit-wrapper light" id="m1"></div>
+      </div>
+      <div class="colon" id="colon2" style="display:none"><div class="dot"></div><div class="dot"></div></div>
+      <div class="groups" id="secGroup" style="display:none">
+        <div class="digit-wrapper deep"  id="s0"></div>
+        <div class="digit-wrapper light" id="s1"></div>
+      </div>
+    </div>
+
+    <div class="analog-display hidden" id="analogDisplay">
+      <div class="analog-shell style-apple" id="analogShell">
+        <svg class="analog-svg style-numeric" id="analogSvg" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">
+          <g id="tickGroup"></g>
+          <g id="numberGroup"></g>
+
+          <g id="handHour"    class="hand-hour"   style="transform-origin:50% 50%;">   <line x1="50" y1="50" x2="50" y2="26"/></g>
+          <g id="handMinute"  class="hand-minute" style="transform-origin:50% 50%;">   <line x1="50" y1="50" x2="50" y2="16"/></g>
+          <g id="handSecond"  class="hand-second" style="transform-origin:50% 50%;">   <line x1="50" y1="52" x2="50" y2="12"/></g>
+
+          <circle class="center-dot" cx="50" cy="50" r="1.2"/>
+        </svg>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="bottom-info" id="bottomInfo">
+    <div class="date-line" id="dateLine"></div>
+    <div class="phase-line hidden" id="phaseLine"></div>
+  </div>
+</div>
+
+<canvas id="confettiCanvas"></canvas>
+<canvas id="emojiCanvas"></canvas>
+
+<div class="hover-zone" id="hoverZone"></div>
+<div class="settings-btn" id="settingsBtn" title="设置">
+  <svg viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="3"></circle>
+    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+  </svg>
+</div>
+
+<div class="settings-panel" id="settingsPanel">
+  <div class="settings-title" id="panelTitle">设置</div>
+
+  <div class="timer-section first">
+    <div class="settings-title" style="margin-bottom:4px" id="lblTimer">倒计时</div>
+    <div class="timer-inputs">
+      <input type="number" id="tmH" min="0" max="99" value="0" inputmode="numeric"><span class="unit" id="unitH">时</span>
+      <input type="number" id="tmM" min="0" max="59" value="5" inputmode="numeric"><span class="unit" id="unitM">分</span>
+      <input type="number" id="tmS" min="0" max="59" value="0" inputmode="numeric"><span class="unit" id="unitS">秒</span>
+    </div>
+    <div class="timer-btns">
+      <button class="btn-start" id="btnStartTimer">开始</button>
+      <button class="btn-cancel" id="btnCancelTimer" disabled>取消</button>
+    </div>
+  </div>
+
+  <div class="timer-section">
+    <div class="settings-title" style="margin-bottom:4px" id="lblPomo">番茄钟</div>
+    <div class="timer-inputs">
+      <input type="number" id="pmWork" min="1" max="120" value="25" inputmode="numeric"><span class="unit" id="unitWork">工作</span>
+      <input type="number" id="pmRest" min="1" max="60" value="5" inputmode="numeric"><span class="unit" id="unitRest">短休</span>
+      <input type="number" id="pmLong" min="1" max="90" value="15" inputmode="numeric"><span class="unit" id="unitLong">长休</span>
+    </div>
+    <div class="pomo-btns">
+      <button class="btn-pomo" id="btnStartPomo">开始</button>
+      <button class="btn-skip" id="btnSkipPomo" disabled>跳过</button>
+      <button class="btn-stop" id="btnStopPomo" disabled>停止</button>
+    </div>
+  </div>
+
+  <div class="settings-divider">
+    <div class="setting-row">
+      <span class="label" id="lblClockStyle">时钟样式</span>
+      <div class="segmented clockstyle">
+        <button id="btnDigital" class="active">数字</button>
+        <button id="btnApple">苹果</button>
+      </div>
+    </div>
+
+    <div class="setting-row hidden" id="rowAnalogStyle">
+      <span class="label" id="lblAnalogStyle">指针风格</span>
+      <div class="segmented three">
+        <button id="styleClassic">经典</button>
+        <button id="styleNumeric" class="active">数字</button>
+        <button id="styleRoman">罗马</button>
+      </div>
+    </div>
+
+    <div class="setting-row hidden" id="rowDark">
+      <span class="label" id="lblDark">暗色模式</span>
+      <div class="switch" id="swDark"></div>
+    </div>
+
+    <div class="setting-row"><span class="label" id="lblDate">显示日期</span><div class="switch on" id="swDate"></div></div>
+
+    <div class="setting-row" id="rowWeekday"><span class="label" id="lblWeekday">显示星期</span><div class="switch on" id="swWeekday"></div></div>
+
+    <div class="setting-row" id="rowSeconds"><span class="label" id="lblSeconds">显示秒数</span><div class="switch" id="swSeconds"></div></div>
+
+    <div class="setting-row"><span class="label" id="lblHourFormat">时间制</span><div class="segmented"><button id="btn24">24h</button><button id="btn12" class="active">12h</button></div></div>
+    <div class="setting-row"><span class="label" id="lblLang">语言</span><div class="segmented"><button id="btnZh" class="active">中文</button><button id="btnEn">EN</button></div></div>
+  </div>
+
+  <div class="settings-divider color-divider" id="colorDivider">
+    <div class="settings-title" style="margin-bottom:8px" id="lblColor">颜色</div>
+    <div class="color-picker" id="colorPicker">
+      <div class="color-swatch swatch-blue selected" data-color="blue"     title="蓝色"></div>
+      <div class="color-swatch swatch-orange"        data-color="orange"   title="橙色"></div>
+      <div class="color-swatch swatch-yellow"        data-color="yellow"   title="黄色"></div>
+      <div class="color-swatch swatch-pink"          data-color="pink"     title="粉色"></div>
+      <div class="color-swatch swatch-darkred"       data-color="darkred"  title="暗红色"></div>
+      <div class="color-swatch swatch-green"         data-color="green"    title="绿色"></div>
+      <div class="color-swatch swatch-mint"          data-color="mint"     title="薄荷色"></div>
+      <div class="color-swatch swatch-darkblue"      data-color="darkblue" title="深蓝色"></div>
+      <div class="color-swatch swatch-purple"        data-color="purple"   title="粉紫色"></div>
+      <div class="color-swatch swatch-darkgreen"     data-color="darkgreen" title="暗绿色"></div>
+      <div class="color-swatch swatch-brown"         data-color="brown"    title="棕色"></div>
+    </div>
+  </div>
+</div>
+<div class="timer-flash" id="timerFlash"></div>
+
+<script>
+var COLOR_THEMES = {
+  blue:      { deep:'#0b62c5', light:'#62b7ff', dot:'rgba(255,255,255,.8)' },
+  orange:    { deep:'#c25b0b', light:'#ffab62', dot:'rgba(255,255,255,.8)' },
+  yellow:    { deep:'#b39500', light:'#ffe25c', dot:'rgba(255,255,255,.8)' },
+  pink:      { deep:'#c51875', light:'#ff8fc8', dot:'rgba(255,255,255,.8)' },
+  darkred:   { deep:'#8b1a1a', light:'#e06565', dot:'rgba(255,255,255,.8)' },
+  green:     { deep:'#1a8b3d', light:'#6fe092', dot:'rgba(255,255,255,.8)' },
+  mint:      { deep:'#1a9e8f', light:'#7de8d8', dot:'rgba(255,255,255,.8)' },
+  darkblue:  { deep:'#143d8a', light:'#5a86e0', dot:'rgba(255,255,255,.8)' },
+  purple:    { deep:'#7a2ea8', light:'#c98fff', dot:'rgba(255,255,255,.8)' },
+  darkgreen: { deep:'#2d5016', light:'#7aa85a', dot:'rgba(255,255,255,.8)' },
+  brown:     { deep:'#5c3a1e', light:'#c19a6b', dot:'rgba(255,255,255,.8)' }
+};
+
+function applyColorTheme(name){
+  var t = COLOR_THEMES[name] || COLOR_THEMES.blue;
+  var root = document.getElementById('timeDisplay');
+  root.style.setProperty('--col-deep', t.deep);
+  root.style.setProperty('--col-light', t.light);
+  root.style.setProperty('--col-dot', t.dot);
+  document.documentElement.style.setProperty('--col-deep', t.deep);
+  document.documentElement.style.setProperty('--col-light', t.light);
+  var swatches = document.querySelectorAll('.color-swatch');
+  swatches.forEach(function(el){
+    el.classList.toggle('selected', el.getAttribute('data-color') === name);
+  });
+}
+
+/* ==================== 礼花 ==================== */
+var confettiCanvas = document.getElementById('confettiCanvas');
+var confettiCtx = confettiCanvas.getContext('2d');
+var confettiParticles = [];
+var confettiRafId = null;
+var confettiSpawnTimer = null;
+var confettiEndTime = 0;
+var confettiRunning = false;
+
+var CONFETTI_COLORS = [
+  '#ff3b30', '#ff9500', '#ffcc00', '#34c759',
+  '#00c7be', '#30b0c7', '#007aff', '#5856d6',
+  '#af52de', '#ff2d55', '#ff6b9d', '#ffffff'
+];
+
+function resizeConfettiCanvas(){
+  var dpr = window.devicePixelRatio || 1;
+  confettiCanvas.width = window.innerWidth * dpr;
+  confettiCanvas.height = window.innerHeight * dpr;
+  confettiCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function createConfettiBurst(x, y, count){
+  for (var i = 0; i < count; i++){
+    var angle = Math.random() * Math.PI * 2;
+    var speed = 3 + Math.random() * 7;
+    confettiParticles.push({
+      x: x, y: y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - 2,
+      w: 6 + Math.random() * 8,
+      h: 6 + Math.random() * 8,
+      color: CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)],
+      rot: Math.random() * Math.PI * 2,
+      vrot: (Math.random() - 0.5) * 0.3,
+      life: 1,
+      decay: 0.006 + Math.random() * 0.008,
+      shape: Math.random() < 0.5 ? 'rect' : 'circle'
+    });
+  }
+}
+
+function updateConfetti(){
+  if (!confettiRunning) return;
+  confettiCtx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+  var gravity = 0.12;
+  for (var i = confettiParticles.length - 1; i >= 0; i--){
+    var p = confettiParticles[i];
+    p.vy += gravity;
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vx *= 0.99;
+    p.rot += p.vrot;
+    p.life -= p.decay;
+    if (p.life <= 0 || p.y > window.innerHeight + 40){
+      confettiParticles.splice(i, 1);
+      continue;
+    }
+    confettiCtx.save();
+    confettiCtx.globalAlpha = Math.max(0, p.life);
+    confettiCtx.translate(p.x, p.y);
+    confettiCtx.rotate(p.rot);
+    confettiCtx.fillStyle = p.color;
+    if (p.shape === 'rect'){
+      confettiCtx.fillRect(-p.w/2, -p.h/2, p.w, p.h);
+    } else {
+      confettiCtx.beginPath();
+      confettiCtx.arc(0, 0, p.w/2, 0, Math.PI * 2);
+      confettiCtx.fill();
+    }
+    confettiCtx.restore();
+  }
+  confettiRafId = requestAnimationFrame(updateConfetti);
+}
+
+var CONFETTI_DURATION_MS = 8000;
+
+function startConfetti(){
+  if (confettiRunning) {
+    confettiEndTime = Date.now() + CONFETTI_DURATION_MS;
+    return;
+  }
+  confettiRunning = true;
+  confettiEndTime = Date.now() + CONFETTI_DURATION_MS;
+  resizeConfettiCanvas();
+  confettiCanvas.classList.add('active');
+  confettiParticles = [];
+
+  var W = window.innerWidth, H = window.innerHeight;
+  createConfettiBurst(W * 0.5, H * 0.5, 60);
+  createConfettiBurst(W * 0.1, H * 0.9, 40);
+  createConfettiBurst(W * 0.9, H * 0.9, 40);
+
+  if (confettiSpawnTimer) clearInterval(confettiSpawnTimer);
+  confettiSpawnTimer = setInterval(function(){
+    if (!confettiRunning) return;
+    if (Date.now() > confettiEndTime) return;
+    var W = window.innerWidth, H = window.innerHeight;
+    var r = Math.random();
+    var x = r < 0.33 ? W * (0.05 + Math.random() * 0.15)
+          : r < 0.66 ? W * (0.40 + Math.random() * 0.20)
+          :             W * (0.80 + Math.random() * 0.15);
+    createConfettiBurst(x, H * (0.85 + Math.random() * 0.1), 25);
+  }, 300);
+
+  if (confettiRafId === null){
+    confettiRafId = requestAnimationFrame(updateConfetti);
+  }
+
+  setTimeout(function(){
+    if (confettiSpawnTimer){
+      clearInterval(confettiSpawnTimer);
+      confettiSpawnTimer = null;
+    }
+    setTimeout(function(){
+      confettiRunning = false;
+      if (confettiRafId !== null){
+        cancelAnimationFrame(confettiRafId);
+        confettiRafId = null;
+      }
+      confettiParticles = [];
+      confettiCtx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+      confettiCanvas.classList.remove('active');
+    }, 1500);
+  }, CONFETTI_DURATION_MS);
+}
+
+window.addEventListener('resize', function(){
+  if (confettiRunning) resizeConfettiCanvas();
+});
+
+/* ==================== Emoji 掉落 ==================== */
+var emojiCanvas = document.getElementById('emojiCanvas');
+var emojiCtx = emojiCanvas.getContext('2d');
+var emojiItems = [];
+var emojiRafId = null;
+var emojiSpawnTimer = null;
+var emojiEndTime = 0;
+var emojiRunning = false;
+
+var EMOJI_LIST = ['🎉','🎊','✨','🌟','⭐','💫','🎈','🥳','🎁','🌈','💖','👍','🎂','🍭','🦄','🌸'];
+
+function resizeEmojiCanvas(){
+  var dpr = window.devicePixelRatio || 1;
+  emojiCanvas.width = window.innerWidth * dpr;
+  emojiCanvas.height = window.innerHeight * dpr;
+  emojiCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function spawnEmoji(){
+  var size = 20 + Math.random() * 18;
+  emojiItems.push({
+    x: Math.random() * window.innerWidth,
+    y: -size,
+    vy: 1 + Math.random() * 3.5,
+    vx: (Math.random() - 0.5) * 0.8,
+    size: size,
+    rot: (Math.random() - 0.5) * 0.5,
+    vrot: (Math.random() - 0.5) * 0.03,
+    emoji: EMOJI_LIST[Math.floor(Math.random() * EMOJI_LIST.length)],
+    life: 1,
+    decay: 0.002 + Math.random() * 0.003
+  });
+}
+
+function updateEmoji(){
+  if (!emojiRunning) return;
+  emojiCtx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+
+  for (var i = emojiItems.length - 1; i >= 0; i--){
+    var e = emojiItems[i];
+    e.vy += 0.06;
+    e.y += e.vy;
+    e.x += e.vx;
+    e.rot += e.vrot;
+    e.life -= e.decay;
+
+    if (e.y > window.innerHeight + e.size || e.life <= 0){
+      emojiItems.splice(i, 1);
+      continue;
+    }
+
+    emojiCtx.save();
+    emojiCtx.globalAlpha = Math.max(0, Math.min(1, e.life));
+    emojiCtx.translate(e.x, e.y);
+    emojiCtx.rotate(e.rot);
+    emojiCtx.font = e.size + 'px serif';
+    emojiCtx.textAlign = 'center';
+    emojiCtx.textBaseline = 'middle';
+    emojiCtx.fillText(e.emoji, 0, 0);
+    emojiCtx.restore();
+  }
+
+  emojiRafId = requestAnimationFrame(updateEmoji);
+}
+
+var EMOJI_DURATION_MS = 8000;
+
+function startEmojiFall(){
+  if (emojiRunning) {
+    emojiEndTime = Date.now() + EMOJI_DURATION_MS;
+    return;
+  }
+  emojiRunning = true;
+  emojiEndTime = Date.now() + EMOJI_DURATION_MS;
+  resizeEmojiCanvas();
+  emojiCanvas.classList.add('active');
+  emojiItems = [];
+
+  for (var i = 0; i < 12; i++){
+    spawnEmoji();
+  }
+
+  if (emojiSpawnTimer) clearInterval(emojiSpawnTimer);
+  emojiSpawnTimer = setInterval(function(){
+    if (!emojiRunning) return;
+    if (Date.now() > emojiEndTime) return;
+    spawnEmoji();
+  }, 60);
+
+  if (emojiRafId === null){
+    emojiRafId = requestAnimationFrame(updateEmoji);
+  }
+
+  setTimeout(function(){
+    if (emojiSpawnTimer){
+      clearInterval(emojiSpawnTimer);
+      emojiSpawnTimer = null;
+    }
+    setTimeout(function(){
+      emojiRunning = false;
+      if (emojiRafId !== null){
+        cancelAnimationFrame(emojiRafId);
+        emojiRafId = null;
+      }
+      emojiItems = [];
+      emojiCtx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+      emojiCanvas.classList.remove('active');
+    }, 3000);
+  }, EMOJI_DURATION_MS);
+}
+
+window.addEventListener('resize', function(){
+  if (emojiRunning) resizeEmojiCanvas();
+});
+
+/* ==================== 数字翻页 ==================== */
+function DigitSlot(host){
+  var self = this;
+  this.host = host;
+  this.front = document.createElement('div');
+  this.back = document.createElement('div');
+  this.front.className = 'digit-layer';
+  this.back.className = 'digit-layer off-up';
+  this.ft = document.createElement('div');
+  this.bt = document.createElement('div');
+  this.ft.className = 'digit-text';
+  this.bt.className = 'digit-text';
+  this.front.appendChild(this.ft);
+  this.back.appendChild(this.bt);
+  this.host.appendChild(this.front);
+  this.host.appendChild(this.back);
+  this.value = null;
+  this.animating = false;
+  this.front.addEventListener('transitionend', function(e){
+    if(e.propertyName === 'transform') self.finish();
+  });
+}
+DigitSlot.prototype.finish = function(){
+  if(!this.animating) return;
+  var of = this.front, oft = this.ft;
+  this.front = this.back; this.ft = this.bt;
+  this.back = of; this.bt = oft;
+  this.back.classList.remove('off-down');
+  this.back.classList.add('off-up');
+  this.bt.textContent = '';
+  this.animating = false;
+};
+DigitSlot.prototype.setInstant = function(v){
+  this.value = v;
+  this.ft.textContent = v;
+  this.bt.textContent = '';
+  this.front.classList.remove('off-down','off-up');
+  this.back.classList.add('off-up');
+  this.animating = false;
+};
+DigitSlot.prototype.setValue = function(v){
+  if(v === this.value) return;
+  if(this.animating) this.finish();
+  this.value = v;
+  this.bt.textContent = v;
+  this.back.classList.remove('off-down');
+  this.back.classList.add('off-up');
+  this.front.classList.remove('off-down', 'off-up');
+  void this.back.offsetHeight;
+  this.animating = true;
+  this.front.classList.add('off-down');
+  this.back.classList.remove('off-up');
+  var self = this;
+  var dur = parseFloat(getComputedStyle(this.front).transitionDuration) * 1000 || 760;
+  setTimeout(function(){ self.finish(); }, dur + 120);
+};
+DigitSlot.prototype.clear = function(){
+  this.value = null;
+  this.ft.textContent = '';
+  this.bt.textContent = '';
+  this.front.classList.remove('off-down','off-up');
+  this.back.classList.add('off-up');
+  this.animating = false;
+};
+
+var s = {
+  h0: new DigitSlot(document.getElementById('h0')),
+  h1: new DigitSlot(document.getElementById('h1')),
+  m0: new DigitSlot(document.getElementById('m0')),
+  m1: new DigitSlot(document.getElementById('m1')),
+  s0: new DigitSlot(document.getElementById('s0')),
+  s1: new DigitSlot(document.getElementById('s1'))
+};
+
+var secGroup = document.getElementById('secGroup');
+var colon2 = document.getElementById('colon2');
+var phaseLine = document.getElementById('phaseLine');
+var stage = document.getElementById('stage');
+var timeDisplay = document.getElementById('timeDisplay');
+var analogDisplay = document.getElementById('analogDisplay');
+var analogSvg = document.getElementById('analogSvg');
+var analogShell = document.getElementById('analogShell');
+
+var rowAnalogStyle = document.getElementById('rowAnalogStyle');
+var rowSeconds     = document.getElementById('rowSeconds');
+var rowWeekday     = document.getElementById('rowWeekday');
+var rowDark        = document.getElementById('rowDark');
+var colorDivider   = document.getElementById('colorDivider');
+var swDark         = document.getElementById('swDark');
+
+function applyConditionalRows(){
+  var isApple  = (state.clockStyle === 'apple');
+  var isDigital= (state.clockStyle === 'digital');
+
+  if (isApple){ rowAnalogStyle.classList.remove('hidden'); }
+  else { rowAnalogStyle.classList.add('hidden'); }
+
+  if (isDigital){ rowSeconds.classList.remove('hidden'); }
+  else { rowSeconds.classList.add('hidden'); }
+
+  if (isApple){ rowDark.classList.remove('hidden'); }
+  else { rowDark.classList.add('hidden'); }
+
+  if (isApple){ colorDivider.classList.add('hidden'); }
+  else { colorDivider.classList.remove('hidden'); }
+
+  if (state.showDate){ rowWeekday.classList.remove('hidden'); }
+  else { rowWeekday.classList.add('hidden'); }
+
+  if (isApple){ document.body.classList.add('analog-mode'); }
+  else { document.body.classList.remove('analog-mode'); }
+}
+
+var ROMAN = ['XII','I','II','III','IV','V','VI','VII','VIII','IX','X','XI'];
+
+function buildTicks(){
+  var g = document.getElementById('tickGroup');
+  g.innerHTML = '';
+  for (var i = 0; i < 60; i++){
+    var angle = i * 6;
+    var isHour = (i % 5 === 0);
+    var r1, r2, cls;
+    if (isHour){ r1 = 41; r2 = 45; cls = 'tick-hour'; }
+    else { r1 = 43; r2 = 45; cls = 'tick-minute'; }
+    var rad = (angle - 90) * Math.PI / 180;
+    var x1 = 50 + r1 * Math.cos(rad);
+    var y1 = 50 + r1 * Math.sin(rad);
+    var x2 = 50 + r2 * Math.cos(rad);
+    var y2 = 50 + r2 * Math.sin(rad);
+    var line = document.createElementNS('http://www.w3.org/2000/svg','line');
+    line.setAttribute('x1', x1.toFixed(3));
+    line.setAttribute('y1', y1.toFixed(3));
+    line.setAttribute('x2', x2.toFixed(3));
+    line.setAttribute('y2', y2.toFixed(3));
+    line.setAttribute('class', cls);
+    g.appendChild(line);
+  }
+}
+
+function buildNumbers(){
+  var g = document.getElementById('numberGroup');
+  g.innerHTML = '';
+  for (var i = 0; i < 12; i++){
+    var hour = i === 0 ? 12 : i;
+    var angle = hour * 30;
+    var rad = (angle - 90) * Math.PI / 180;
+    var r = 35;
+    var x = 50 + r * Math.cos(rad);
+    var y = 50 + r * Math.sin(rad);
+
+    var tA = document.createElementNS('http://www.w3.org/2000/svg','text');
+    tA.setAttribute('x', x.toFixed(3));
+    tA.setAttribute('y', y.toFixed(3));
+    tA.setAttribute('class', 'face-number arabic');
+    tA.textContent = String(hour);
+    g.appendChild(tA);
+
+    var tR = document.createElementNS('http://www.w3.org/2000/svg','text');
+    tR.setAttribute('x', x.toFixed(3));
+    tR.setAttribute('y', y.toFixed(3));
+    tR.setAttribute('class', 'face-number roman');
+    tR.textContent = ROMAN[i];
+    g.appendChild(tR);
+  }
+}
+
+var handHour = document.getElementById('handHour');
+var handMinute = document.getElementById('handMinute');
+var handSecond = document.getElementById('handSecond');
+
+var analogRafId = null;
+
+function updateAnalogHands(){
+  var now = new Date();
+  var ms = now.getMilliseconds();
+  var s = now.getSeconds() + ms / 1000;
+  var m = now.getMinutes() + s / 60;
+  var h = (now.getHours() % 12) + m / 60;
+  var secDeg = s * 6;
+  var minDeg = m * 6;
+  var hourDeg = h * 30;
+  handSecond.style.transform = 'rotate(' + secDeg + 'deg)';
+  handMinute.style.transform = 'rotate(' + minDeg + 'deg)';
+  handHour.style.transform   = 'rotate(' + hourDeg + 'deg)';
+  analogRafId = requestAnimationFrame(updateAnalogHands);
+}
+function startAnalog(){
+  if (analogRafId === null) analogRafId = requestAnimationFrame(updateAnalogHands);
+}
+function stopAnalog(){
+  if (analogRafId !== null){ cancelAnimationFrame(analogRafId); analogRafId = null; }
+}
+
+function applyScale(){
+  timeDisplay.style.transform = 'scale(1)';
+  void timeDisplay.offsetWidth;
+  var cs = getComputedStyle(timeDisplay);
+  var uw = parseFloat(cs.getPropertyValue('--unit-w')) || 140;
+  var uo = parseFloat(cs.getPropertyValue('--unit-overlap')) || 50;
+  var uh = parseFloat(cs.getPropertyValue('--unit-h')) || 200;
+  var designW6 = 6*uw - 3*uo;
+  if (state.showSeconds) designW6 = designW6 * 1.00;
+  else designW6 = designW6 * 0.588;
+  var availW = stage.clientWidth;
+  var availH = window.innerHeight;
+  var targetW = availW * 1.00;
+  var targetH = availH * 0.95;
+  var scaleW = targetW / designW6;
+  var scaleH = targetH / uh;
+  var scale = Math.min(scaleW, scaleH);
+  timeDisplay.style.transform = 'scale(' + scale + ')';
+}
+
+var resizeTimer = null;
+function onResize(){
+  if (resizeTimer) clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(applyScale, 60);
+}
+window.addEventListener('resize', onResize);
+window.addEventListener('orientationchange', onResize);
+function refreshScale(){ requestAnimationFrame(applyScale); }
+
+var STORAGE_KEY = 'clock-settings-v19';
+var state = {
+  clockStyle:'digital',
+  analogStyle:'numeric',
+  appleDark:false,
+  showDate:true,
+  showWeekday:true,
+  showSeconds:false,
+  hourFormat:'12',
+  lang:'zh',
+  color:'blue'
+};
+try {
+  var sv = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+  Object.assign(state, sv);
+  if (state.analogStyle === 'simple') state.analogStyle = 'numeric';
+  if (state.analogStyle === 'dark') state.analogStyle = 'numeric';
+  if (state.clockStyle === 'analog') state.clockStyle = 'apple';
+} catch(e){}
+function saveState(){ try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){} }
+
+function applySecondsVisibility(){
+  if (timerRunning || pomoRunning) return;
+  if (state.showSeconds) {
+    secGroup.style.display = 'flex';
+    colon2.style.display = 'flex';
+  } else {
+    secGroup.style.display = 'none';
+    colon2.style.display = 'none';
+    s.s0.clear();
+    s.s1.clear();
+  }
+  refreshScale();
+}
+
+function updateClock(first){
+  if(timerRunning || pomoRunning) return;
+  var now = new Date();
+  var hh = now.getHours();
+  if (state.hourFormat === '12') { hh = hh % 12; if (hh === 0) hh = 12; }
+  var h = String(hh).padStart(2,'0');
+  var m = String(now.getMinutes()).padStart(2,'0');
+  var sec = String(now.getSeconds()).padStart(2,'0');
+  var v = { h0:h[0], h1:h[1], m0:m[0], m1:m[1] };
+  if (state.showSeconds) { v.s0 = sec[0]; v.s1 = sec[1]; }
+  Object.keys(v).forEach(function(k){
+    first ? s[k].setInstant(v[k]) : s[k].setValue(v[k]);
+  });
+}
+
+var WD_EN=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+var WD_ZH=['星期日','星期一','星期二','星期三','星期四','星期五','星期六'];
+
+function updateDate(){
+  var el = document.getElementById('dateLine');
+  if(!state.showDate){ el.classList.add('hidden'); return; }
+  el.classList.remove('hidden');
+  var now = new Date(), wi = now.getDay(), mi = now.getMonth(), d = now.getDate(), y = now.getFullYear();
+  var t = '';
+  if(state.lang === 'zh'){
+    var zhMonth = mi + 1;
+    t = y + '年' + zhMonth + '月' + d + '日';
+    if(state.showWeekday) t += '·' + WD_ZH[wi];
+  } else {
+    var MO_EN=['January','February','March','April','May','June','July','August','September','October','November','December'];
+    if(state.showWeekday) t += WD_EN[wi];
+    t += (t?' · ':'') + MO_EN[mi];
+    t += (t?' ':'') + d + ', ' + y;
+  }
+  el.textContent = t;
+}
+
+var tickTimer = null;
+function scheduleTick(){
+  updateClock(false);
+  var now = Date.now();
+  tickTimer = setTimeout(scheduleTick, 1000 - (now % 1000) + 2);
+}
+function restartTick(){
+  if(tickTimer) clearTimeout(tickTimer);
+  updateClock(true);
+  scheduleTick();
+}
+
+function applyClockStyle(){
+  analogShell.classList.remove('style-apple','style-apple-dark');
+  if (state.clockStyle === 'digital'){
+    timeDisplay.classList.remove('hidden');
+    analogDisplay.classList.add('hidden');
+    stopAnalog();
+    restartTick();
+    refreshScale();
+  } else if (state.clockStyle === 'apple'){
+    timeDisplay.classList.add('hidden');
+    analogDisplay.classList.remove('hidden');
+    if (state.appleDark) analogShell.classList.add('style-apple-dark');
+    else analogShell.classList.add('style-apple');
+    if (tickTimer){ clearTimeout(tickTimer); tickTimer = null; }
+    startAnalog();
+  }
+  applyConditionalRows();
+}
+
+function applyAnalogStyle(){
+  analogSvg.classList.remove('style-classic','style-numeric','style-roman');
+  analogSvg.classList.add('style-' + state.analogStyle);
+}
+
+var settingsBtn = document.getElementById('settingsBtn');
+var settingsPanel = document.getElementById('settingsPanel');
+
+settingsBtn.addEventListener('click', function(e){
+  e.stopPropagation();
+  var o = settingsPanel.classList.toggle('open');
+  settingsBtn.classList.toggle('open', o);
+});
+settingsPanel.addEventListener('click', function(e){ e.stopPropagation(); });
+
+function toggleDate(){
+  state.showDate = !state.showDate;
+  swDate.classList.toggle('on', state.showDate);
+  saveState();
+  updateDate();
+  applyConditionalRows();
+}
+
+document.addEventListener('click', function(e){
+  if (settingsPanel.contains(e.target)) return;
+  if (settingsBtn.contains(e.target)) return;
+  if (settingsPanel.classList.contains('open')){
+    settingsPanel.classList.remove('open');
+    settingsBtn.classList.remove('open');
+  } else {
+    toggleDate();
+  }
+});
+
+var swDate=document.getElementById('swDate');
+var swWeekday=document.getElementById('swWeekday');
+var swSeconds=document.getElementById('swSeconds');
+
+swDate.classList.toggle('on', state.showDate);
+swWeekday.classList.toggle('on', state.showWeekday);
+swSeconds.classList.toggle('on', state.showSeconds);
+swDark.classList.toggle('on', state.appleDark);
+
+swDate.addEventListener('click', function(e){ e.stopPropagation(); toggleDate(); }, true);
+swWeekday.addEventListener('click', function(){
+  state.showWeekday = !state.showWeekday;
+  swWeekday.classList.toggle('on', state.showWeekday);
+  saveState();
+  updateDate();
+});
+swSeconds.addEventListener('click', function(){
+  state.showSeconds = !state.showSeconds;
+  swSeconds.classList.toggle('on', state.showSeconds);
+  saveState();
+  if (timerRunning) renderTimer(currentTimerSeconds, true);
+  else if (pomoRunning) renderTimer(currentPomoSeconds, true);
+  else { applySecondsVisibility(); restartTick(); }
+});
+swDark.addEventListener('click', function(){
+  state.appleDark = !state.appleDark;
+  swDark.classList.toggle('on', state.appleDark);
+  saveState();
+  if (state.clockStyle === 'apple'){
+    analogShell.classList.remove('style-apple','style-apple-dark');
+    if (state.appleDark) analogShell.classList.add('style-apple-dark');
+    else analogShell.classList.add('style-apple');
+  }
+});
+
+var btnDigital = document.getElementById('btnDigital');
+var btnApple   = document.getElementById('btnApple');
+
+function applyClockStyleButtons(){
+  btnDigital.classList.toggle('active', state.clockStyle === 'digital');
+  btnApple  .classList.toggle('active', state.clockStyle === 'apple');
+}
+btnDigital.addEventListener('click', function(){
+  if (state.clockStyle === 'digital') return;
+  state.clockStyle = 'digital';
+  saveState();
+  applyClockStyleButtons();
+  applyClockStyle();
+});
+btnApple.addEventListener('click', function(){
+  if (state.clockStyle === 'apple') return;
+  state.clockStyle = 'apple';
+  saveState();
+  applyClockStyleButtons();
+  applyClockStyle();
+});
+
+var styleClassic = document.getElementById('styleClassic');
+var styleNumeric = document.getElementById('styleNumeric');
+var styleRoman   = document.getElementById('styleRoman');
+
+function applyAnalogStyleButtons(){
+  styleClassic.classList.toggle('active', state.analogStyle === 'classic');
+  styleNumeric.classList.toggle('active', state.analogStyle === 'numeric');
+  styleRoman  .classList.toggle('active', state.analogStyle === 'roman');
+}
+function bindStyle(el, val){
+  el.addEventListener('click', function(){
+    state.analogStyle = val;
+    saveState();
+    applyAnalogStyleButtons();
+    applyAnalogStyle();
+  });
+}
+bindStyle(styleClassic, 'classic');
+bindStyle(styleNumeric, 'numeric');
+bindStyle(styleRoman,   'roman');
+
+var colorPicker = document.getElementById('colorPicker');
+colorPicker.addEventListener('click', function(e){
+  var sw = e.target.closest('.color-swatch');
+  if (!sw) return;
+  var name = sw.getAttribute('data-color');
+  state.color = name;
+  saveState();
+  applyColorTheme(name);
+});
+
+var btn24 = document.getElementById('btn24');
+var btn12 = document.getElementById('btn12');
+function applyHourFormat(){
+  btn24.classList.toggle('active', state.hourFormat === '24');
+  btn12.classList.toggle('active', state.hourFormat === '12');
+}
+btn24.addEventListener('click', function(){
+  if (state.hourFormat === '24') return;
+  state.hourFormat = '24';
+  saveState(); applyHourFormat();
+  if (!timerRunning && !pomoRunning && state.clockStyle === 'digital') restartTick();
+});
+btn12.addEventListener('click', function(){
+  if (state.hourFormat === '12') return;
+  state.hourFormat = '12';
+  saveState(); applyHourFormat();
+  if (!timerRunning && !pomoRunning && state.clockStyle === 'digital') restartTick();
+});
+
+var btnZh=document.getElementById('btnZh'), btnEn=document.getElementById('btnEn');
+function applyLang(){
+  btnZh.classList.toggle('active', state.lang==='zh');
+  btnEn.classList.toggle('active', state.lang==='en');
+  var zh = state.lang==='zh';
+  document.getElementById('panelTitle').textContent = zh?'设置':'Settings';
+  document.getElementById('lblClockStyle').textContent = zh?'时钟样式':'Clock style';
+  document.getElementById('btnDigital').textContent = zh?'数字':'Digital';
+  document.getElementById('btnApple').textContent = zh?'苹果':'Apple';
+  document.getElementById('lblAnalogStyle').textContent = zh?'指针风格':'Hand style';
+  document.getElementById('styleClassic').textContent = zh?'经典':'Classic';
+  document.getElementById('styleNumeric').textContent = zh?'数字':'Numeric';
+  document.getElementById('styleRoman').textContent = zh?'罗马':'Roman';
+  document.getElementById('lblDark').textContent = zh?'暗色模式':'Dark mode';
+  document.getElementById('lblDate').textContent = zh?'显示日期':'Show date';
+  document.getElementById('lblWeekday').textContent = zh?'显示星期':'Show weekday';
+  document.getElementById('lblSeconds').textContent = zh?'显示秒数':'Show seconds';
+  document.getElementById('lblHourFormat').textContent = zh?'时间制':'Hour format';
+  document.getElementById('lblLang').textContent = zh?'语言':'Language';
+  document.getElementById('lblColor').textContent = zh?'颜色':'Color';
+  document.getElementById('lblTimer').textContent = zh?'倒计时':'Timer';
+  document.getElementById('unitH').textContent = zh?'时':'h';
+  document.getElementById('unitM').textContent = zh?'分':'m';
+  document.getElementById('unitS').textContent = zh?'秒':'s';
+  document.getElementById('btnStartTimer').textContent = zh?'开始':'Start';
+  document.getElementById('btnCancelTimer').textContent = zh?'取消':'Cancel';
+  document.getElementById('lblPomo').textContent = zh?'番茄钟':'Pomodoro';
+  document.getElementById('unitWork').textContent = zh?'工作':'work';
+  document.getElementById('unitRest').textContent = zh?'短休':'short';
+  document.getElementById('unitLong').textContent = zh?'长休':'long';
+  document.getElementById('btnStartPomo').textContent = zh?'开始':'Start';
+  document.getElementById('btnSkipPomo').textContent = zh?'跳过':'Skip';
+  document.getElementById('btnStopPomo').textContent = zh?'停止':'Stop';
+  var tips = {
+    blue:      zh?'蓝色':'Blue',
+    orange:    zh?'橙色':'Orange',
+    yellow:    zh?'黄色':'Yellow',
+    pink:      zh?'粉色':'Pink',
+    darkred:   zh?'暗红色':'Dark red',
+    green:     zh?'绿色':'Green',
+    mint:      zh?'薄荷色':'Mint',
+    darkblue:  zh?'深蓝色':'Dark blue',
+    purple:    zh?'粉紫色':'Purple',
+    darkgreen: zh?'暗绿色':'Dark green',
+    brown:     zh?'棕色':'Brown'
+  };
+  document.querySelectorAll('.color-swatch').forEach(function(el){
+    var k = el.getAttribute('data-color');
+    el.setAttribute('title', tips[k] || '');
+  });
+  updateDate();
+  updatePhaseLine();
+}
+btnZh.addEventListener('click', function(){ state.lang='zh'; saveState(); applyLang(); });
+btnEn.addEventListener('click', function(){ state.lang='en'; saveState(); applyLang(); });
+
+/* ==================== 倒计时 ==================== */
+var tmH=document.getElementById('tmH'), tmM=document.getElementById('tmM'), tmS=document.getElementById('tmS');
+var btnStartTimer=document.getElementById('btnStartTimer');
+var btnCancelTimer=document.getElementById('btnCancelTimer');
+var timerFlash=document.getElementById('timerFlash');
+var timerInterval=null, timerEnd=0, timerRunning=false;
+var currentTimerSeconds = 0;
+
+function readInputSeconds(){
+  var h = Math.max(0, Math.min(99, parseInt(tmH.value)||0));
+  var m = Math.max(0, Math.min(59, parseInt(tmM.value)||0));
+  var sec = Math.max(0, Math.min(59, parseInt(tmS.value)||0));
+  return h*3600 + m*60 + sec;
+}
+
+function renderTimer(sec, first){
+  sec = Math.max(0, sec);
+  if (state.clockStyle !== 'digital'){
+    timeDisplay.classList.remove('hidden');
+    analogDisplay.classList.add('hidden');
+    stopAnalog();
+  }
+  if (state.showSeconds) {
+    secGroup.style.display = 'flex';
+    colon2.style.display = 'flex';
+    var totalSec = Math.floor(sec);
+    var h = Math.floor(totalSec / 3600);
+    var m = Math.floor((totalSec % 3600) / 60);
+    var ss = totalSec % 60;
+    var hh = String(h).padStart(2,'0');
+    var mm = String(m).padStart(2,'0');
+    var sss = String(ss).padStart(2,'0');
+    var vals = { h0:hh[0], h1:hh[1], m0:mm[0], m1:mm[1], s0:sss[0], s1:sss[1] };
+    Object.keys(vals).forEach(function(k){
+      if (first || s[k].value === null) s[k].setInstant(vals[k]);
+      else s[k].setValue(vals[k]);
+    });
+  } else {
+    secGroup.style.display = 'none';
+    colon2.style.display = 'none';
+    s.s0.clear();
+    s.s1.clear();
+    var totalMin = Math.round(sec / 60);
+    var h2 = Math.floor(totalMin / 60);
+    var m2 = totalMin % 60;
+    var hh2 = String(h2).padStart(2,'0');
+    var mm2 = String(m2).padStart(2,'0');
+    var vals2 = { h0:hh2[0], h1:hh2[1], m0:mm2[0], m1:mm2[1] };
+    Object.keys(vals2).forEach(function(k){
+      if (first || s[k].value === null) s[k].setInstant(vals2[k]);
+      else s[k].setValue(vals2[k]);
+    });
+  }
+  if (first) refreshScale();
+}
+
+function updateTimerButtons(){
+  var t = readInputSeconds();
+  btnStartTimer.disabled = t <= 0 || timerRunning || pomoRunning;
+  btnCancelTimer.disabled = !timerRunning;
+}
+function enterTimerMode(){
+  document.body.classList.add('timer-running');
+  /* 【新增】进入倒计时模式，停掉时钟 tick，防止它在倒计时结束后覆盖 00:00:00 */
+  if (tickTimer){ clearTimeout(tickTimer); tickTimer = null; }
+}
+function exitTimerMode(){ document.body.classList.remove('timer-running'); applySecondsVisibility(); }
+
+function startTimer(){
+  var total = readInputSeconds();
+  if(total <= 0) return;
+  if (pomoRunning) return;
+  if (!state.showSeconds) {
+    state.showSeconds = true;
+    swSeconds.classList.add('on');
+    saveState();
+  }
+  timerRunning = true;
+  timerEnd = Date.now() + total*1000;
+  enterTimerMode();
+  renderTimer(total, true);
+  updateTimerButtons();
+  updatePomoButtons();
+  refreshScale();
+
+  if(timerInterval) clearInterval(timerInterval);
+  timerInterval = setInterval(function(){
+    var left = Math.round((timerEnd - Date.now())/1000);
+    if(left <= 0){ renderTimer(0, false); finishTimer(); }
+    else { currentTimerSeconds = left; renderTimer(left, false); }
+  }, 200);
+}
+
+function finishTimer(){
+  if(timerInterval){ clearInterval(timerInterval); timerInterval = null; }
+  /* 【新增】再次确保时钟 tick 停掉 */
+  if (tickTimer){ clearTimeout(tickTimer); tickTimer = null; }
+  timerRunning = false;
+  /* 显示 00:00:00 并保持 8 秒 */
+  renderTimer(0, false);
+  updateTimerButtons();
+  updatePomoButtons();
+  if(navigator.vibrate){ try{ navigator.vibrate([200,100,200]); }catch(e){} }
+  startConfetti();
+  /* 8 秒礼花结束后，关闭秒数、恢复时钟 */
+  setTimeout(function(){
+    if (state.showSeconds) {
+      state.showSeconds = false;
+      swSeconds.classList.remove('on');
+      saveState();
+    }
+    exitTimerMode();
+    applyClockStyle();
+    restartTick();   /* 【新增】8秒后才重新启动时钟 */
+    refreshScale();
+  }, CONFETTI_DURATION_MS + 1500);
+}
+
+function cancelTimer(){
+  if(timerInterval){ clearInterval(timerInterval); timerInterval = null; }
+  timerRunning = false;
+  if (state.showSeconds) {
+    state.showSeconds = false;
+    swSeconds.classList.remove('on');
+    saveState();
+  }
+  updateTimerButtons();
+  updatePomoButtons();
+  exitTimerMode();
+  applyClockStyle();
+  restartTick();
+  refreshScale();
+}
+btnStartTimer.addEventListener('click', startTimer);
+btnCancelTimer.addEventListener('click', cancelTimer);
+[tmH, tmM, tmS].forEach(function(i){
+  i.addEventListener('input', updateTimerButtons);
+  i.addEventListener('change', updateTimerButtons);
+});
+
+/* ==================== 番茄钟 ==================== */
+var pmWork = document.getElementById('pmWork');
+var pmRest = document.getElementById('pmRest');
+var pmLong = document.getElementById('pmLong');
+var btnStartPomo = document.getElementById('btnStartPomo');
+var btnSkipPomo = document.getElementById('btnSkipPomo');
+var btnStopPomo = document.getElementById('btnStopPomo');
+
+var pomoInterval = null;
+var pomoEnd = 0;
+var pomoRunning = false;
+var pomoPhase = null;
+var pomoRound = 0;
+var currentPomoSeconds = 0;
+
+function updatePhaseLine(){
+  if (!pomoRunning) { phaseLine.classList.add('hidden'); return; }
+  phaseLine.classList.remove('hidden');
+  var zh = state.lang === 'zh';
+  var phaseName = '';
+  if (pomoPhase === 'work')       phaseName = zh ? '专注' : 'Focus';
+  else if (pomoPhase === 'short') phaseName = zh ? '短休' : 'Short break';
+  else if (pomoPhase === 'long')  phaseName = zh ? '长休' : 'Long break';
+  var roundText = zh ? '第 ' + pomoRound + '/4 轮' : 'Round ' + pomoRound + '/4';
+  phaseLine.textContent = phaseName + ' · ' + roundText;
+}
+function updatePomoButtons(){
+  btnStartPomo.disabled = pomoRunning || timerRunning;
+  btnSkipPomo.disabled = !pomoRunning;
+  btnStopPomo.disabled = !pomoRunning;
+  updateTimerButtons();
+}
+function readPomoSettings(){
+  return {
+    work: Math.max(1, Math.min(120, parseInt(pmWork.value)||25)) * 60,
+    rest: Math.max(1, Math.min(60,  parseInt(pmRest.value)||5))  * 60,
+    long: Math.max(1, Math.min(90,  parseInt(pmLong.value)||15)) * 60
+  };
+}
+
+function startPomo(){
+  if (pomoRunning || timerRunning) return;
+  if (!state.showSeconds) {
+    state.showSeconds = true;
+    swSeconds.classList.add('on');
+    saveState();
+  }
+  pomoRunning = true;
+  pomoRound = 1;
+  pomoPhase = 'work';
+  document.body.classList.add('timer-running');
+  if (tickTimer){ clearTimeout(tickTimer); tickTimer = null; }
+  enterPomoPhase();
+  updatePomoButtons();
+  updatePhaseLine();
+  refreshScale();
+}
+
+function enterPomoPhase(){
+  var cfg = readPomoSettings();
+  var dur = 0;
+  if (pomoPhase === 'work')       dur = cfg.work;
+  else if (pomoPhase === 'short') dur = cfg.rest;
+  else if (pomoPhase === 'long')  dur = cfg.long;
+  document.body.classList.toggle('break-mode', pomoPhase !== 'work');
+  s.h0.clear(); s.h1.clear(); s.m0.clear(); s.m1.clear(); s.s0.clear(); s.s1.clear();
+  pomoEnd = Date.now() + dur * 1000;
+  currentPomoSeconds = dur;
+  renderTimer(dur, true);
+  if (pomoInterval) clearInterval(pomoInterval);
+  pomoInterval = setInterval(function(){
+    var left = Math.round((pomoEnd - Date.now())/1000);
+    if (left <= 0) { renderTimer(0, false); nextPomoPhase(true); }
+    else { currentPomoSeconds = left; renderTimer(left, false); }
+  }, 200);
+}
+
+function nextPomoPhase(fromTimer){
+  if (pomoInterval) { clearInterval(pomoInterval); pomoInterval = null; }
+  var doFlash = (fromTimer === true);
+
+  if (pomoPhase === 'work') {
+    if (doFlash) { if(navigator.vibrate){ try{ navigator.vibrate([200,100,200]); }catch(e){} } }
+    startConfetti();
+    if (pomoRound >= 4) { pomoPhase = 'long'; } else { pomoPhase = 'short'; }
+    if (doFlash) setTimeout(function(){ enterPomoPhase(); updatePhaseLine(); }, 1200);
+    else { enterPomoPhase(); updatePhaseLine(); }
+  } else {
+    if (doFlash) { if(navigator.vibrate){ try{ navigator.vibrate([100,80,100,80,100]); }catch(e){} } }
+    startEmojiFall();
+    if (pomoPhase === 'long') { pomoRound = 1; } else { pomoRound += 1; }
+    pomoPhase = 'work';
+    if (doFlash) setTimeout(function(){ enterPomoPhase(); updatePhaseLine(); }, 1200);
+    else { enterPomoPhase(); updatePhaseLine(); }
+  }
+}
+function skipPomo(){ if (!pomoRunning) return; nextPomoPhase(false); }
+
+function stopPomo(){
+  if (pomoInterval) { clearInterval(pomoInterval); pomoInterval = null; }
+  pomoRunning = false; pomoPhase = null; pomoRound = 0;
+  document.body.classList.remove('timer-running');
+  document.body.classList.remove('break-mode');
+  phaseLine.classList.add('hidden');
+  if (state.showSeconds) {
+    state.showSeconds = false;
+    swSeconds.classList.remove('on');
+    saveState();
+  }
+  updatePomoButtons();
+  applySecondsVisibility();
+  applyClockStyle();
+  restartTick();
+  refreshScale();
+}
+
+btnStartPomo.addEventListener('click', startPomo);
+btnSkipPomo.addEventListener('click', skipPomo);
+btnStopPomo.addEventListener('click', stopPomo);
+
+var hoverZone = document.getElementById('hoverZone');
+var hideBtnTimer = null;
+function showSettingsBtn(){
+  if (hideBtnTimer) { clearTimeout(hideBtnTimer); hideBtnTimer = null; }
+  settingsBtn.classList.add('show');
+}
+function hideSettingsBtn(){
+  if (settingsPanel.classList.contains('open')) return;
+  settingsBtn.classList.remove('show');
+}
+if (hoverZone) {
+  hoverZone.addEventListener('mouseenter', showSettingsBtn);
+  hoverZone.addEventListener('mouseleave', function(){
+    if (hideBtnTimer) clearTimeout(hideBtnTimer);
+    hideBtnTimer = setTimeout(hideSettingsBtn, 400);
+  });
+  settingsBtn.addEventListener('mouseenter', showSettingsBtn);
+  settingsBtn.addEventListener('mouseleave', function(){
+    if (hideBtnTimer) clearTimeout(hideBtnTimer);
+    hideBtnTimer = setTimeout(hideSettingsBtn, 400);
+  });
+}
+
+buildTicks();
+buildNumbers();
+applyColorTheme(state.color);
+applySecondsVisibility();
+applyHourFormat();
+applyClockStyleButtons();
+applyAnalogStyleButtons();
+applyAnalogStyle();
+updateClock(true);
+updateDate();
+applyLang();
+updateTimerButtons();
+updatePomoButtons();
+applyClockStyle();
+restartTick();
+window.addEventListener('load', refreshScale);
+setTimeout(refreshScale, 200);
+
+document.addEventListener('visibilitychange', function(){
+  if(!document.hidden && !timerRunning && !pomoRunning && state.clockStyle === 'digital') restartTick();
+});
+window.addEventListener('pageshow', function(){
+  if(!timerRunning && !pomoRunning && state.clockStyle === 'digital') restartTick();
+  refreshScale();
+});
+</script>
+</body>
+</html>
