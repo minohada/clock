@@ -60,6 +60,8 @@ body{display:flex;align-items:center;justify-content:center;font-family:-apple-s
 .dot{width:0.17em;height:0.17em;background:var(--col-dot);border-radius:50%;transition:background .4s}
 .digit-wrapper{position:relative;width:var(--unit-w);height:var(--unit-h);overflow:visible}
 .groups .digit-wrapper + .digit-wrapper{margin-left:calc(-1 * var(--unit-overlap))}
+.digit-wrapper.hidden{ display:none; }
+
 #h0{z-index:10;transform:rotate(-6deg) skewX(-3deg);transform-origin:50% 60%}
 #h1{z-index:20;transform:rotate(4deg) skewX(2deg);transform-origin:50% 60%}
 #m0{z-index:10;transform:rotate(-5deg) skewX(-2deg);transform-origin:50% 60%}
@@ -487,7 +489,7 @@ body.break-mode .phase-line{color:rgba(255,200,98,.75)}
 
     <div class="setting-row" id="rowSeconds"><span class="label" id="lblSeconds">显示秒数</span><div class="switch" id="swSeconds"></div></div>
 
-    <div class="setting-row" id="rowHourPad"><span class="label" id="lblHourPad">小时补零</span><div class="switch" id="swHourPad"></div></div>
+    <div class="setting-row" id="rowHourPad"><span class="label" id="lblHourPad">小时补位</span><div class="switch" id="swHourPad"></div></div>
 
     <div class="setting-row"><span class="label" id="lblHourFormat">时间制</span><div class="segmented"><button id="btn24">24h</button><button id="btn12" class="active">12h</button></div></div>
     <div class="setting-row"><span class="label" id="lblLang">语言</span><div class="segmented"><button id="btnZh" class="active">中文</button><button id="btnEn">EN</button></div></div>
@@ -861,6 +863,9 @@ var s = {
   s1: new DigitSlot(document.getElementById('s1'))
 };
 
+var h0El = document.getElementById('h0');
+var h1El = document.getElementById('h1');
+
 var secGroup = document.getElementById('secGroup');
 var colon2 = document.getElementById('colon2');
 var phaseLine = document.getElementById('phaseLine');
@@ -876,6 +881,7 @@ var rowWeekday     = document.getElementById('rowWeekday');
 var rowDark        = document.getElementById('rowDark');
 var colorDivider   = document.getElementById('colorDivider');
 var swDark         = document.getElementById('swDark');
+var swHourPad      = document.getElementById('swHourPad');
 
 function applyConditionalRows(){
   var isApple  = (state.clockStyle === 'apple');
@@ -898,6 +904,39 @@ function applyConditionalRows(){
 
   if (isApple){ document.body.classList.add('analog-mode'); }
   else { document.body.classList.remove('analog-mode'); }
+}
+
+var lastHourShowState = null;
+
+function applyHourDisplay(hourStr){
+  var isSingleDigit = (hourStr[0] === '0' || hourStr[0] === '');
+
+  if (state.hourPad) {
+    if (lastHourShowState !== 'pad') {
+      h0El.classList.remove('hidden');
+      h1El.classList.remove('hidden');
+      h0El.classList.remove('light'); h0El.classList.add('deep');
+      h1El.classList.remove('deep');  h1El.classList.add('light');
+      lastHourShowState = 'pad';
+    }
+  } else {
+    if (isSingleDigit) {
+      if (lastHourShowState !== 'single') {
+        h1El.classList.add('hidden');
+        h0El.classList.remove('hidden');
+        h0El.classList.remove('deep'); h0El.classList.add('light');
+        lastHourShowState = 'single';
+      }
+    } else {
+      if (lastHourShowState !== 'double') {
+        h0El.classList.remove('hidden');
+        h1El.classList.remove('hidden');
+        h0El.classList.remove('light'); h0El.classList.add('deep');
+        h1El.classList.remove('deep');  h1El.classList.add('light');
+        lastHourShowState = 'double';
+      }
+    }
+  }
 }
 
 var ROMAN = ['XII','I','II','III','IV','V','VI','VII','VIII','IX','X','XI'];
@@ -980,44 +1019,27 @@ function stopAnalog(){
   if (analogRafId !== null){ cancelAnimationFrame(analogRafId); analogRafId = null; }
 }
 
+/* 【修改】1.6 倍（原 1.7） */
 function applyScale(){
   timeDisplay.style.transform = 'scale(1)';
   void timeDisplay.offsetWidth;
-
   var cs = getComputedStyle(timeDisplay);
   var uw = parseFloat(cs.getPropertyValue('--unit-w')) || 140;
   var uo = parseFloat(cs.getPropertyValue('--unit-overlap')) || 50;
   var uh = parseFloat(cs.getPropertyValue('--unit-h')) || 200;
-
-  var visibleUnits = 0;
-  var digitWraps = timeDisplay.querySelectorAll('.digit-wrapper');
-  digitWraps.forEach(function(el){
-    if (el.style.display !== 'none'){
-      visibleUnits += 1;
-    }
-  });
-  var visibleColons = 1 + (state.showSeconds ? 1 : 0);
-
-  var designW = 0;
-  if (visibleUnits > 0){
-    designW = visibleUnits * uw - (visibleUnits - 1) * uo + visibleColons * uo;
-  }
-
-  if (state.showSeconds){
-    designW = designW * 1.00;
+  var designW6 = 6*uw - 3*uo;
+  if (state.showSeconds) {
+    designW6 = designW6 * 1.00;
   } else {
-    designW = designW * (1 / 1.6);
+    designW6 = designW6 * 0.625;   // 1.6 倍
   }
-
   var availW = stage.clientWidth;
   var availH = window.innerHeight;
   var targetW = availW * 1.00;
   var targetH = availH * 0.95;
-
-  var scaleW = designW > 0 ? targetW / designW : 1;
+  var scaleW = targetW / designW6;
   var scaleH = targetH / uh;
   var scale = Math.min(scaleW, scaleH);
-
   timeDisplay.style.transform = 'scale(' + scale + ')';
 }
 
@@ -1030,7 +1052,7 @@ window.addEventListener('resize', onResize);
 window.addEventListener('orientationchange', onResize);
 function refreshScale(){ requestAnimationFrame(applyScale); }
 
-var STORAGE_KEY = 'clock-settings-v19';
+var STORAGE_KEY = 'clock-settings-v20';
 var state = {
   clockStyle:'digital',
   analogStyle:'numeric',
@@ -1038,7 +1060,7 @@ var state = {
   showDate:true,
   showWeekday:true,
   showSeconds:false,
-  hourPad:false,   // 【新增】是否补零，默认 false
+  hourPad:false,
   hourFormat:'12',
   lang:'zh',
   color:'blue'
@@ -1066,44 +1088,43 @@ function applySecondsVisibility(){
   refreshScale();
 }
 
-/* 【改动】无秒数时支持「小时补零」开关 */
 function updateClock(first){
   if(timerRunning || pomoRunning) return;
   var now = new Date();
   var hh = now.getHours();
   if (state.hourFormat === '12') { hh = hh % 12; if (hh === 0) hh = 12; }
-
-  var h1Wrapper = document.getElementById('h1');
+  var h = String(hh).padStart(2,'0');
   var m = String(now.getMinutes()).padStart(2,'0');
   var sec = String(now.getSeconds()).padStart(2,'0');
 
-  if (state.showSeconds){
-    // 有秒数：小时补零，格式 00:00:00
-    var h = String(hh).padStart(2,'0');
-    h1Wrapper.style.display = 'block';
-    var v = { h0:h[0], h1:h[1], m0:m[0], m1:m[1], s0:sec[0], s1:sec[1] };
-    Object.keys(v).forEach(function(k){
-      first ? s[k].setInstant(v[k]) : s[k].setValue(v[k]);
-    });
+  applyHourDisplay(h);
+
+  var hour0Val, hour1Val;
+  if (state.hourPad) {
+    hour0Val = h[0];
+    hour1Val = h[1];
+  } else if (hh < 10) {
+    hour0Val = h[1];
+    hour1Val = '';
   } else {
-    // 无秒数：根据 hourPad 决定是否补零
-    var hs = state.hourPad ? String(hh).padStart(2,'0') : String(hh);
-    if (hs.length > 1){
-      h1Wrapper.style.display = 'block';
-      var v = { h0:hs[0], h1:hs[1], m0:m[0], m1:m[1] };
-      Object.keys(v).forEach(function(k){
-        first ? s[k].setInstant(v[k]) : s[k].setValue(v[k]);
-      });
-    } else {
-      h1Wrapper.style.display = 'none';
-      s.h1.clear();
-      var v = { h0:hs[0], m0:m[0], m1:m[1] };
-      Object.keys(v).forEach(function(k){
-        first ? s[k].setInstant(v[k]) : s[k].setValue(v[k]);
-      });
-    }
+    hour0Val = h[0];
+    hour1Val = h[1];
   }
-  if (first) refreshScale();
+
+  var v = { h0:hour0Val, m0:m[0], m1:m[1] };
+  if (state.hourPad) v.h1 = hour1Val;
+  else if (hh >= 10) v.h1 = hour1Val;
+
+  if (!state.hourPad && hh < 10) {
+    if (s.h1.value !== null) s.h1.clear();
+  }
+
+  if (state.showSeconds) { v.s0 = sec[0]; v.s1 = sec[1]; }
+
+  Object.keys(v).forEach(function(k){
+    if (v[k] === '') return;
+    first ? s[k].setInstant(v[k]) : s[k].setValue(v[k]);
+  });
 }
 
 var WD_EN=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
@@ -1196,13 +1217,12 @@ document.addEventListener('click', function(e){
 var swDate=document.getElementById('swDate');
 var swWeekday=document.getElementById('swWeekday');
 var swSeconds=document.getElementById('swSeconds');
-var swHourPad=document.getElementById('swHourPad');
 
 swDate.classList.toggle('on', state.showDate);
 swWeekday.classList.toggle('on', state.showWeekday);
 swSeconds.classList.toggle('on', state.showSeconds);
-swHourPad.classList.toggle('on', state.hourPad);
 swDark.classList.toggle('on', state.appleDark);
+swHourPad.classList.toggle('on', state.hourPad);
 
 swDate.addEventListener('click', function(e){ e.stopPropagation(); toggleDate(); }, true);
 swWeekday.addEventListener('click', function(){
@@ -1219,13 +1239,6 @@ swSeconds.addEventListener('click', function(){
   else if (pomoRunning) renderTimer(currentPomoSeconds, true);
   else { applySecondsVisibility(); restartTick(); }
 });
-/* 【新增】小时补零开关 */
-swHourPad.addEventListener('click', function(){
-  state.hourPad = !state.hourPad;
-  swHourPad.classList.toggle('on', state.hourPad);
-  saveState();
-  if (!timerRunning && !pomoRunning && state.clockStyle === 'digital') restartTick();
-});
 swDark.addEventListener('click', function(){
   state.appleDark = !state.appleDark;
   swDark.classList.toggle('on', state.appleDark);
@@ -1234,6 +1247,15 @@ swDark.addEventListener('click', function(){
     analogShell.classList.remove('style-apple','style-apple-dark');
     if (state.appleDark) analogShell.classList.add('style-apple-dark');
     else analogShell.classList.add('style-apple');
+  }
+});
+swHourPad.addEventListener('click', function(){
+  state.hourPad = !state.hourPad;
+  swHourPad.classList.toggle('on', state.hourPad);
+  saveState();
+  lastHourShowState = null;
+  if (!timerRunning && !pomoRunning) {
+    updateClock(true);
   }
 });
 
@@ -1326,7 +1348,7 @@ function applyLang(){
   document.getElementById('lblDate').textContent = zh?'显示日期':'Show date';
   document.getElementById('lblWeekday').textContent = zh?'显示星期':'Show weekday';
   document.getElementById('lblSeconds').textContent = zh?'显示秒数':'Show seconds';
-  document.getElementById('lblHourPad').textContent = zh?'小时补零':'Pad hour';
+  document.getElementById('lblHourPad').textContent = zh?'小时补位':'Hour padding';
   document.getElementById('lblHourFormat').textContent = zh?'时间制':'Hour format';
   document.getElementById('lblLang').textContent = zh?'语言':'Language';
   document.getElementById('lblColor').textContent = zh?'颜色':'Color';
@@ -1388,9 +1410,6 @@ function renderTimer(sec, first){
     analogDisplay.classList.add('hidden');
     stopAnalog();
   }
-  var h1Wrapper = document.getElementById('h1');
-  h1Wrapper.style.display = 'block';
-
   if (state.showSeconds) {
     secGroup.style.display = 'flex';
     colon2.style.display = 'flex';
@@ -1401,6 +1420,12 @@ function renderTimer(sec, first){
     var hh = String(h).padStart(2,'0');
     var mm = String(m).padStart(2,'0');
     var sss = String(ss).padStart(2,'0');
+
+    h0El.classList.remove('hidden');
+    h1El.classList.remove('hidden');
+    h0El.classList.remove('light'); h0El.classList.add('deep');
+    h1El.classList.remove('deep');  h1El.classList.add('light');
+
     var vals = { h0:hh[0], h1:hh[1], m0:mm[0], m1:mm[1], s0:sss[0], s1:sss[1] };
     Object.keys(vals).forEach(function(k){
       if (first || s[k].value === null) s[k].setInstant(vals[k]);
@@ -1416,6 +1441,12 @@ function renderTimer(sec, first){
     var m2 = totalMin % 60;
     var hh2 = String(h2).padStart(2,'0');
     var mm2 = String(m2).padStart(2,'0');
+
+    h0El.classList.remove('hidden');
+    h1El.classList.remove('hidden');
+    h0El.classList.remove('light'); h0El.classList.add('deep');
+    h1El.classList.remove('deep');  h1El.classList.add('light');
+
     var vals2 = { h0:hh2[0], h1:hh2[1], m0:mm2[0], m1:mm2[1] };
     Object.keys(vals2).forEach(function(k){
       if (first || s[k].value === null) s[k].setInstant(vals2[k]);
@@ -1477,6 +1508,7 @@ function finishTimer(){
       saveState();
     }
     exitTimerMode();
+    lastHourShowState = null;
     applyClockStyle();
     restartTick();
     refreshScale();
@@ -1493,6 +1525,7 @@ function cancelTimer(){
   }
   updateTimerButtons();
   updatePomoButtons();
+  lastHourShowState = null;
   exitTimerMode();
   applyClockStyle();
   restartTick();
@@ -1615,6 +1648,7 @@ function stopPomo(){
     saveState();
   }
   updatePomoButtons();
+  lastHourShowState = null;
   applySecondsVisibility();
   applyClockStyle();
   restartTick();
