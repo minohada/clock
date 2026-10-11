@@ -487,6 +487,8 @@ body.break-mode .phase-line{color:rgba(255,200,98,.75)}
 
     <div class="setting-row" id="rowSeconds"><span class="label" id="lblSeconds">显示秒数</span><div class="switch" id="swSeconds"></div></div>
 
+    <div class="setting-row" id="rowHourPad"><span class="label" id="lblHourPad">小时补零</span><div class="switch" id="swHourPad"></div></div>
+
     <div class="setting-row"><span class="label" id="lblHourFormat">时间制</span><div class="segmented"><button id="btn24">24h</button><button id="btn12" class="active">12h</button></div></div>
     <div class="setting-row"><span class="label" id="lblLang">语言</span><div class="segmented"><button id="btnZh" class="active">中文</button><button id="btnEn">EN</button></div></div>
   </div>
@@ -981,20 +983,41 @@ function stopAnalog(){
 function applyScale(){
   timeDisplay.style.transform = 'scale(1)';
   void timeDisplay.offsetWidth;
+
   var cs = getComputedStyle(timeDisplay);
   var uw = parseFloat(cs.getPropertyValue('--unit-w')) || 140;
   var uo = parseFloat(cs.getPropertyValue('--unit-overlap')) || 50;
   var uh = parseFloat(cs.getPropertyValue('--unit-h')) || 200;
-  var designW6 = 6*uw - 3*uo;
-  if (state.showSeconds) designW6 = designW6 * 1.00;
-  else designW6 = designW6 * 0.588;
+
+  var visibleUnits = 0;
+  var digitWraps = timeDisplay.querySelectorAll('.digit-wrapper');
+  digitWraps.forEach(function(el){
+    if (el.style.display !== 'none'){
+      visibleUnits += 1;
+    }
+  });
+  var visibleColons = 1 + (state.showSeconds ? 1 : 0);
+
+  var designW = 0;
+  if (visibleUnits > 0){
+    designW = visibleUnits * uw - (visibleUnits - 1) * uo + visibleColons * uo;
+  }
+
+  if (state.showSeconds){
+    designW = designW * 1.00;
+  } else {
+    designW = designW * (1 / 1.6);
+  }
+
   var availW = stage.clientWidth;
   var availH = window.innerHeight;
   var targetW = availW * 1.00;
   var targetH = availH * 0.95;
-  var scaleW = targetW / designW6;
+
+  var scaleW = designW > 0 ? targetW / designW : 1;
   var scaleH = targetH / uh;
   var scale = Math.min(scaleW, scaleH);
+
   timeDisplay.style.transform = 'scale(' + scale + ')';
 }
 
@@ -1015,6 +1038,7 @@ var state = {
   showDate:true,
   showWeekday:true,
   showSeconds:false,
+  hourPad:false,   // 【新增】是否补零，默认 false
   hourFormat:'12',
   lang:'zh',
   color:'blue'
@@ -1042,19 +1066,44 @@ function applySecondsVisibility(){
   refreshScale();
 }
 
+/* 【改动】无秒数时支持「小时补零」开关 */
 function updateClock(first){
   if(timerRunning || pomoRunning) return;
   var now = new Date();
   var hh = now.getHours();
   if (state.hourFormat === '12') { hh = hh % 12; if (hh === 0) hh = 12; }
-  var h = String(hh).padStart(2,'0');
+
+  var h1Wrapper = document.getElementById('h1');
   var m = String(now.getMinutes()).padStart(2,'0');
   var sec = String(now.getSeconds()).padStart(2,'0');
-  var v = { h0:h[0], h1:h[1], m0:m[0], m1:m[1] };
-  if (state.showSeconds) { v.s0 = sec[0]; v.s1 = sec[1]; }
-  Object.keys(v).forEach(function(k){
-    first ? s[k].setInstant(v[k]) : s[k].setValue(v[k]);
-  });
+
+  if (state.showSeconds){
+    // 有秒数：小时补零，格式 00:00:00
+    var h = String(hh).padStart(2,'0');
+    h1Wrapper.style.display = 'block';
+    var v = { h0:h[0], h1:h[1], m0:m[0], m1:m[1], s0:sec[0], s1:sec[1] };
+    Object.keys(v).forEach(function(k){
+      first ? s[k].setInstant(v[k]) : s[k].setValue(v[k]);
+    });
+  } else {
+    // 无秒数：根据 hourPad 决定是否补零
+    var hs = state.hourPad ? String(hh).padStart(2,'0') : String(hh);
+    if (hs.length > 1){
+      h1Wrapper.style.display = 'block';
+      var v = { h0:hs[0], h1:hs[1], m0:m[0], m1:m[1] };
+      Object.keys(v).forEach(function(k){
+        first ? s[k].setInstant(v[k]) : s[k].setValue(v[k]);
+      });
+    } else {
+      h1Wrapper.style.display = 'none';
+      s.h1.clear();
+      var v = { h0:hs[0], m0:m[0], m1:m[1] };
+      Object.keys(v).forEach(function(k){
+        first ? s[k].setInstant(v[k]) : s[k].setValue(v[k]);
+      });
+    }
+  }
+  if (first) refreshScale();
 }
 
 var WD_EN=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
@@ -1147,10 +1196,12 @@ document.addEventListener('click', function(e){
 var swDate=document.getElementById('swDate');
 var swWeekday=document.getElementById('swWeekday');
 var swSeconds=document.getElementById('swSeconds');
+var swHourPad=document.getElementById('swHourPad');
 
 swDate.classList.toggle('on', state.showDate);
 swWeekday.classList.toggle('on', state.showWeekday);
 swSeconds.classList.toggle('on', state.showSeconds);
+swHourPad.classList.toggle('on', state.hourPad);
 swDark.classList.toggle('on', state.appleDark);
 
 swDate.addEventListener('click', function(e){ e.stopPropagation(); toggleDate(); }, true);
@@ -1167,6 +1218,13 @@ swSeconds.addEventListener('click', function(){
   if (timerRunning) renderTimer(currentTimerSeconds, true);
   else if (pomoRunning) renderTimer(currentPomoSeconds, true);
   else { applySecondsVisibility(); restartTick(); }
+});
+/* 【新增】小时补零开关 */
+swHourPad.addEventListener('click', function(){
+  state.hourPad = !state.hourPad;
+  swHourPad.classList.toggle('on', state.hourPad);
+  saveState();
+  if (!timerRunning && !pomoRunning && state.clockStyle === 'digital') restartTick();
 });
 swDark.addEventListener('click', function(){
   state.appleDark = !state.appleDark;
@@ -1268,6 +1326,7 @@ function applyLang(){
   document.getElementById('lblDate').textContent = zh?'显示日期':'Show date';
   document.getElementById('lblWeekday').textContent = zh?'显示星期':'Show weekday';
   document.getElementById('lblSeconds').textContent = zh?'显示秒数':'Show seconds';
+  document.getElementById('lblHourPad').textContent = zh?'小时补零':'Pad hour';
   document.getElementById('lblHourFormat').textContent = zh?'时间制':'Hour format';
   document.getElementById('lblLang').textContent = zh?'语言':'Language';
   document.getElementById('lblColor').textContent = zh?'颜色':'Color';
@@ -1329,6 +1388,9 @@ function renderTimer(sec, first){
     analogDisplay.classList.add('hidden');
     stopAnalog();
   }
+  var h1Wrapper = document.getElementById('h1');
+  h1Wrapper.style.display = 'block';
+
   if (state.showSeconds) {
     secGroup.style.display = 'flex';
     colon2.style.display = 'flex';
@@ -1370,7 +1432,6 @@ function updateTimerButtons(){
 }
 function enterTimerMode(){
   document.body.classList.add('timer-running');
-  /* 【新增】进入倒计时模式，停掉时钟 tick，防止它在倒计时结束后覆盖 00:00:00 */
   if (tickTimer){ clearTimeout(tickTimer); tickTimer = null; }
 }
 function exitTimerMode(){ document.body.classList.remove('timer-running'); applySecondsVisibility(); }
@@ -1402,16 +1463,13 @@ function startTimer(){
 
 function finishTimer(){
   if(timerInterval){ clearInterval(timerInterval); timerInterval = null; }
-  /* 【新增】再次确保时钟 tick 停掉 */
   if (tickTimer){ clearTimeout(tickTimer); tickTimer = null; }
   timerRunning = false;
-  /* 显示 00:00:00 并保持 8 秒 */
   renderTimer(0, false);
   updateTimerButtons();
   updatePomoButtons();
   if(navigator.vibrate){ try{ navigator.vibrate([200,100,200]); }catch(e){} }
   startConfetti();
-  /* 8 秒礼花结束后，关闭秒数、恢复时钟 */
   setTimeout(function(){
     if (state.showSeconds) {
       state.showSeconds = false;
@@ -1420,7 +1478,7 @@ function finishTimer(){
     }
     exitTimerMode();
     applyClockStyle();
-    restartTick();   /* 【新增】8秒后才重新启动时钟 */
+    restartTick();
     refreshScale();
   }, CONFETTI_DURATION_MS + 1500);
 }
